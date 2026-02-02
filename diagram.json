@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "author": "Gemini System Architect",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "top": 0, "left": 0, "attrs": {} },
+    {
+      "type": "wokwi-led",
+      "id": "led1",
+      "top": -60,
+      "left": 150,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "res1",
+      "top": -20,
+      "left": 100,
+      "attrs": { "value": "220" }
+    }
+  ],
+  "connections": [
+    [ "uno:GND.1", "led1:C", "black", [ "v0" ] ],
+    [ "uno:13", "res1:1", "green", [ "v0" ] ],
+    [ "res1:2", "led1:A", "green", [ "v0" ] ]
+  ],
+  "dependencies": {}
+}
