@@ -14,8 +14,15 @@ int srv_serial_put_char(char ch, FILE *f) {
 int srv_serial_get_char(FILE *f) {
     // Wait until data is available "Blocking Mode"
     while (!Serial.available());
+    char ch = Serial.read();
+    if (ch == '\r') {
+        // Convert carriage return to newline
+        Serial.write('\r'); // Echo newline back to terminal
+        return '\n';
+    }
+    Serial.write(ch);
     // Read character from Serial port
-    return Serial.read();
+    return ch;
 }
 
 //C. Setup function to initialize Serial and link stdio functions
