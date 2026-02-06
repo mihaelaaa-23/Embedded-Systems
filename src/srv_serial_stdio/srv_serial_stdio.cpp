@@ -7,6 +7,9 @@
 //2. Definire functie scriere caracter (Output) - printf
 int srv_serial_put_char(char ch, FILE *f) {
     // Send character via Serial port
+    if (ch == '\n') {
+        Serial.write('\r');
+    }
     return Serial.write(ch);
 }
 
