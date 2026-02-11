@@ -28,11 +28,11 @@ int srv_stdio_keypad_get_key(FILE *stream) {
     char customKey;
     do {
         customKey = customKeypad.getKey();
-    } while (!customKey);
+    } while (customKey == NO_KEY); // Așteptăm până când o tastă este apăsată
 
-    delay(SRV_KEYPAD_REPEAT_DELAY); // read frequency 1/SRV_KEYPAD_REPEAT_DELAY
+    // delay(SRV_KEYPAD_REPEAT_DELAY); // read frequency 1/SRV_KEYPAD_REPEAT_DELAY
 
-    return customKey;   
+    return (int)customKey;   
 }
 
 void srv_stdio_keypad_setup() {
@@ -40,18 +40,10 @@ void srv_stdio_keypad_setup() {
   // nu necesita, e initializat prin configuratia de definitie, vezi mai sus
 
   //5. Definire stream
-  FILE *my_stream = fdevopen(NULL, srv_stdio_keypad_get_key);
+  FILE *srv_stdio_keypad_stream = fdevopen(NULL, srv_stdio_keypad_get_key);
 
   // link stream to keypad
-    stdin = my_stream;
-} 
-
-
-
-void loop(){
-  char customKey = customKeypad.getKey();
-  
-  if (customKey){
-    Serial.println(customKey);
-  }
+   if (srv_stdio_keypad_stream != NULL) {
+        stdin = srv_stdio_keypad_stream;
+    }
 }

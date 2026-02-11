@@ -14,9 +14,9 @@ int srv_stdio_lcd_put_char(char c, FILE *stream) {
         lcd.clear();
         lcd.setCursor(0, 0);
     } else {
-
+        lcd.print(c);
     }
-    lcd.print(c);
+    return 0;
 }
 
 void srv_stdio_lcd_setup() {

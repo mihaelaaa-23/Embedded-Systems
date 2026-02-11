@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include "app_lab_1_1/app_lab_1_1.h"
+#include "app_lab_1_2/app_lab_1_2.h"
 
 #define USE_APP_LAB_1_1 11
 #define USE_APP_LAB_1_2 12
