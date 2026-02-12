@@ -1,4 +1,5 @@
 #include "srv_stdio_lcd.h"
+#include <Arduino.h>
 #include <stdio.h>
 #include <LiquidCrystal_I2C.h>
 
@@ -7,7 +8,7 @@
 int lcdColumns = 16;
 int lcdRows = 2;
 
-LiquidCrystal_I2C lcd(0x27, lcdColumns, lcdRows);
+LiquidCrystal_I2C lcd(0x3F, lcdColumns, lcdRows);
 
 int srv_stdio_lcd_put_char(char c, FILE *stream) {
     if (c == CLEAR_KEY){
@@ -20,9 +21,10 @@ int srv_stdio_lcd_put_char(char c, FILE *stream) {
 }
 
 void srv_stdio_lcd_setup() {
-    lcd.begin(lcdColumns, lcdRows);
+    lcd.init();
     lcd.backlight();
-    lcd.setCursor(0, 0);
+    lcd.clear();
+    lcd.home();
     FILE *srv_stdio_lcd_stream = fdevopen(srv_stdio_lcd_put_char, NULL);
     stdout = srv_stdio_lcd_stream;
 } 
