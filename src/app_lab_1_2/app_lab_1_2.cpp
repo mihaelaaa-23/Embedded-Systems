@@ -16,7 +16,7 @@ void app_lab_1_2_setup() {
     delay(500);
     
     lcd.clear();
-    lcd.print("System Ready!");
+    printf("System Ready!");
     delay(2000);
 }
 
@@ -31,13 +31,13 @@ void app_lab_1_2_loop() {
     input[3] = 0;
     
     lcd.clear();
-    lcd.print("Enter Code:");
+    printf("Enter Code:");
     lcd.setCursor(0, 1);  // Move to second line
     
     // Read each digit and display it
     for(int i = 0; i < 4; i++) {
         scanf("%c", &input[i]);
-        lcd.print(input[i]);  // Show the digit
+        printf("%c", input[i]);  // Show the digit
         delay(50);
     }
 
