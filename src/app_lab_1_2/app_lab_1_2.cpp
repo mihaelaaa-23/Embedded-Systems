@@ -45,11 +45,11 @@ void app_lab_1_2_loop() {
     lcd.clear();
 
     if (input[0] == code[0] && input[1] == code[1] && input[2] == code[2] && input[3] == code[3]) {
-        lcd.print("Correct code!");
+        printf("Correct code!");
         dd_led_turn_on(LED_GREEN);
         dd_led_turn_off(LED_RED);
     } else {
-        lcd.print("Wrong code!");
+        printf("Wrong code!");
         dd_led_turn_on(LED_RED);
         dd_led_turn_off(LED_GREEN);
     }
