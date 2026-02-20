@@ -31,11 +31,11 @@ void app_lab_1_1_loop() {
     // --- Command Processing ---
     if (strcmp(cmd, "led on") == 0){
         printf("\rLED ON\n");
-        dd_led_turn_on(LED_RED);
+        dd_led_turn_on();
     }
     else if (strcmp(cmd, "led off") == 0){
         printf("\rLED OFF\n");
-        dd_led_turn_off(LED_RED);
+        dd_led_turn_off();
     }
     // --- BONUS: Interactive Help Menu ---
     else if (strcmp(cmd, "help") == 0) {
@@ -50,9 +50,9 @@ void app_lab_1_1_loop() {
         printf("\rBlinking LED Sequence...\n");
         // Toggle LED 3 times with 200ms delay
         for(int i = 0; i < 3; i++) {
-            dd_led_turn_on(LED_RED);
+            dd_led_turn_on();
             delay(200); 
-            dd_led_turn_off(LED_RED);
+            dd_led_turn_off();
             delay(200); 
         }
         printf("Sequence Complete.\n");
