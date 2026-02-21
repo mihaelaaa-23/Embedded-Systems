@@ -12,29 +12,20 @@ void app_lab_2_1_setup() {
     dd_led_setup();
     dd_button_setup();
     srv_serial_stdio_setup();
-    svr_os_seq_setup();
     app_lab_2_1_task_1_setup();
     app_lab_2_1_task_2_setup();
     app_lab_2_1_task_3_setup();
+    svr_os_seq_setup();
     printf("App Lab 2.1: Started\n");
 }
 
-// Idle loop – Consumer: citeste variabilele globale/semnalele produse de taskuri
-// si le raporteaza prin STDIO (printf). Rulat in bucla infinita/IDLE (main loop).
 void app_lab_2_1_loop() {
-    // Consumer: preia starea LED-ului din Task 1 (provider: dd_led)
-    int led_state = dd_led_is_on();
-
-    // Consumer: preia starea LED-ului intermitent din Task 2 (provider: dd_led_1)
-    int led_blink_state = dd_led_1_is_on();
-
-    // Consumer: preia variabila de stare din Task 3 (provider: g_task3_blink_count)
-    int blink_count = g_task3_blink_count;
+    // Apply LED targets to hardware (digitalWrite safe here, not in ISR)
+    dd_led_apply();
 
     printf("App Lab 2.1: Idle | LED1=%s | LED2(blink)=%s | BlinkCount=%d\n",
-           led_state      ? "ON"  : "OFF",
-           led_blink_state ? "ON"  : "OFF",
-           blink_count);
-
+           dd_led_is_on()   ? "ON" : "OFF",
+           dd_led_1_is_on() ? "ON" : "OFF",
+           g_task3_blink_count);
     delay(1000);
 }

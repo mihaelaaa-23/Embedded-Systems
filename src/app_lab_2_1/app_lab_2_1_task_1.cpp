@@ -2,23 +2,24 @@
 #include "dd_led/dd_led.h"
 #include "dd_button/dd_button.h"
 
-void app_lab_2_1_task_1_setup(){
+static int debounce_cnt = 0;
 
+void app_lab_2_1_task_1_setup(){
+    debounce_cnt = 0;
 }
 
 void app_lab_2_1_task_1_loop(){
-    //asteptam apasarea butonului
-    if(dd_button_is_pressed()){ //no spinlock
-        printf("TASK 1: Button Pressed Detected\n");
-        //verificam starea ledului
-        if (dd_led_is_on()){
-            // daca e aprins il stingem
-            dd_led_turn_off();
-    } else {
-            // daca e stins il aprindem
-            dd_led_turn_on();
+    if (debounce_cnt > 0) {
+        debounce_cnt--;
+        return;
+    }
+    if (dd_button_is_pressed()) {
+        if (dd_led_is_on()) {
+            dd_led_set_target(0);
+        } else {
+            dd_led_set_target(1);
         }
-        // evit debounce-ul
-        delay(300);
+        printf("TASK 1: Button Pressed - LED1=%s\n", dd_led_is_on() ? "ON" : "OFF");
+        debounce_cnt = 3;
     }
 }
