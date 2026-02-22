@@ -3,23 +3,22 @@
 
 #include <Arduino.h>
 
-#define LED_PIN   13
-#define LED_1_PIN 12
+#define LED_PIN    13  // red
+#define LED_1_PIN  12  // green
+#define LED_2_PIN  11  // yellow
 
 void dd_led_setup();
 
-// Set target state from ISR (no digitalWrite)
 void dd_led_set_target(int val);
 void dd_led_1_set_target(int val);
+void dd_led_2_set_target(int val);
 
-// Apply targets to hardware - call ONLY from idle loop
 void dd_led_apply();
 
-// Read current target state (ISR-safe)
 int dd_led_is_on();
 int dd_led_1_is_on();
+int dd_led_2_is_on();
 
-// Legacy - only call from main loop
 void dd_led_turn_on();
 void dd_led_turn_off();
 void dd_led_1_turn_on();
