@@ -31,3 +31,5 @@ void dd_led_turn_on()  { led_target = 1; }
 void dd_led_turn_off() { led_target = 0; }
 void dd_led_1_turn_on()  { led_1_target = 1; }
 void dd_led_1_turn_off() { led_1_target = 0; }
+void dd_led_2_turn_on()  { led_2_target = 1; }
+void dd_led_2_turn_off() { led_2_target = 0; }
