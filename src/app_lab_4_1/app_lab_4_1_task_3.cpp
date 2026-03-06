@@ -58,7 +58,7 @@ void task_report(void *pvParameters) {
                snap1.pending_state ? "ALERT" : "OK");
         printf("\r  STATUS:  %s\n", snap1.alert_active ? "!! ALERT !!" : "OK");
         printf("\r------------------------------\n");
-        printf("\r [S2 - DIGITAL (DHT22)]\n");
+        printf("\r [S2 - DIGITAL (DHT11)]\n");
         printf("\r  RAW:     %4d (x0.1 C)\n", raw2);
         printf("\r  Temp:    %4d C\n",         temp2);
         printf("\r  Humidity:%4d %%\n",         humidity);

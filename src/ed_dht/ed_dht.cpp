@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <Arduino_FreeRTOS.h>
 
-#define DHTTYPE DHT22
+#define DHTTYPE DHT11
 
 static DHT      s_dht(ED_DHT_PIN, DHTTYPE);
 static int      s_raw      = 0;
