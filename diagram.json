@@ -35,6 +35,14 @@
     },
 
     {
+      "type": "wokwi-potentiometer",
+      "id": "gas1",
+      "top": 300,
+      "left": 820,
+      "attrs": {}
+    },
+
+    {
       "type": "wokwi-lcd1602",
       "id": "lcd1",
       "top": 150,
@@ -116,6 +124,10 @@
 
     ["mega:2",   "dht1:SDA", "blue",  ["v0"]],
     ["mega:5V",  "dht1:VCC", "red",   ["v0"]],
-    ["mega:GND.4","dht1:GND", "black", ["v0"]]
+    ["mega:GND.4","dht1:GND", "black", ["v0"]],
+
+    ["mega:A1",   "gas1:SIG", "orange", ["v0"]],
+    ["mega:5V",   "gas1:VCC", "red",    ["v0"]],
+    ["mega:GND.5","gas1:GND", "black",  ["v0"]]
   ]
 }
