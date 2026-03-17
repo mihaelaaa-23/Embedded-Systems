@@ -66,7 +66,7 @@ void task_rep_4_2(void *pvParameters) {
                ALERT_HIGH_S1, ALERT_LOW_S1);
         printf("\r  STATUS:     %s\n", s1.alert ? "!! ALERT !!" : "OK");
         printf("\r------------------------------\n");
-        printf("\r [S2 - DIGITAL (DHT22)]\n");
+        printf("\r [S2 - DIGITAL (DHT11)]\n");
         printf("\r  Raw:        %4d C\n",   s2.raw);
         printf("\r  Saturated:  %4d C  (range %d..%d)\n",
                s2.saturated, SAT_MIN_S2, SAT_MAX_S2);
