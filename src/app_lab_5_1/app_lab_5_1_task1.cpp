@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <ctype.h>
 #include <stdlib.h>
+#include "srv_serial_stdio/srv_serial_stdio.h"
 #include <string.h>
 
 static App5UserCmd_t s_cmd = {false, ANALOG_MODE_AUTO, 0};
@@ -143,31 +144,15 @@ void app_lab_5_1_task1(void *pvParameters) {
     (void)pvParameters;
 
     char line_buf[40] = {0};
-    int line_len = 0;
 
     printf("Lab 5.1 ready. Use: ON | OFF | AUTO | PWM <0..255>\n");
 
-    TickType_t last_wake = xTaskGetTickCount();
-
     for (;;) {
-        while (Serial.available() > 0) {
-            char ch = (char)Serial.read();
-
-            if (ch == '\r' || ch == '\n') {
-                line_buf[line_len] = '\0';
-                if (line_len > 0) {
-                    apply_command(line_buf);
-                }
-                line_len = 0;
-                line_buf[0] = '\0';
-                continue;
-            }
-
-            if (line_len < (int)sizeof(line_buf) - 1) {
-                line_buf[line_len++] = ch;
-            }
+        vTaskDelay(pdMS_TO_TICKS(10));
+        
+        if (Serial.available() > 0) {
+            scanf(" %39[^\r\n]", line_buf);
+            apply_command(line_buf);
         }
-
-        vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(ACTUATOR_CMD_PERIOD_MS));
     }
 }

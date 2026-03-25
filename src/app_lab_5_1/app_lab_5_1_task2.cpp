@@ -6,6 +6,7 @@
 #include "dd_sns_angle/dd_sns_angle.h"
 #include <Arduino.h>
 #include <Arduino_FreeRTOS.h>
+#include <dd_led/dd_led.h>
 #include <semphr.h>
 
 App5Snapshot_t g_app5_snapshot = {
@@ -84,17 +85,18 @@ void app_lab_5_1_task2(void *pvParameters) {
             xSemaphoreGive(g_app5_snapshot_mutex);
         }
 
-        // Binary actuator state LED: D9 red ON when binary actuator is active
-        digitalWrite(PIN_LED_BIN_ON, dd_actuator_bin_get_state() ? HIGH : LOW);
+        // binary actuator state → red LED (D9 = LED_PIN in dd_led)
+        dd_actuator_bin_get_state() ? dd_led_turn_on() : dd_led_turn_off();
 
-        // Alert LEDs: D12=OK (green), D11=ALERT (yellow)
         if (analog_alert) {
-            digitalWrite(PIN_LED_OK, LOW);
-            digitalWrite(PIN_LED_ALERT, HIGH);
+            dd_led_1_turn_off();  // green OFF
+            dd_led_2_turn_on();   // yellow ON
         } else {
-            digitalWrite(PIN_LED_OK, HIGH);
-            digitalWrite(PIN_LED_ALERT, LOW);
+            dd_led_1_turn_on();   // green ON
+            dd_led_2_turn_off();  // yellow OFF
         }
+
+        dd_led_apply(); 
 
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(ACTUATOR_COND_PERIOD_MS));
     }

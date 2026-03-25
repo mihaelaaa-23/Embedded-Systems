@@ -3,9 +3,9 @@
 
 #include <Arduino.h>
 
-#define LED_PIN    13  // red
-#define LED_1_PIN  12  // green
-#define LED_2_PIN  11  // yellow
+#define LED_PIN    9   // red   - binary actuator state
+#define LED_1_PIN  12  // green - system OK
+#define LED_2_PIN  11  // yellow - analog alert
 
 void dd_led_setup();
 
