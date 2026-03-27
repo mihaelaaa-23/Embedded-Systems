@@ -2,6 +2,7 @@
 #include "app_lab_5_2_task1.h"
 #include "task_config.h"
 #include "dd_actuator_analog/dd_actuator_analog.h"
+#include "dd_actuator_bin/dd_actuator_bin.h"
 #include "dd_led/dd_led.h"
 #include "ed_potentiometer/ed_potentiometer.h"
 #include <Arduino_FreeRTOS.h>
@@ -58,9 +59,29 @@ void app_lab_5_2_task2(void *pvParameters) {
     TickType_t last_wake = xTaskGetTickCount();
 
     for (;;) {
-        // 1. Read analog input from potentiometer
-        ed_potentiometer_loop();
-        int raw = map(ed_potentiometer_get_raw(), 0, 1023, 0, 255);
+        // 1. Read commands from user (via Task 1)
+        App52Cmd_t cmd = app_lab_5_2_task1_get_latest();
+        
+        // 2. Control binary actuator (relay/solenoid)
+        dd_actuator_bin_set_requested(cmd.bin_requested);
+        dd_actuator_bin_step();
+        
+        // 3. Get binary actuator state
+        bool bin_requested = dd_actuator_bin_get_requested();
+        bool bin_pending   = dd_actuator_bin_get_pending();
+        bool bin_state     = dd_actuator_bin_get_state();
+        
+        // 4. Read analog motor control input based on mode
+        int pot_raw = 0;
+        int raw;
+        
+        if (cmd.analog_mode == ANALOG_MODE_AUTO) {
+            ed_potentiometer_loop();
+            pot_raw = map(ed_potentiometer_get_raw(), 0, 1023, 0, 255);
+            raw = pot_raw;  // use potentiometer in AUTO mode
+        } else {
+            raw = cmd.target_pwm;  // use serial command in MANUAL mode (no pot reading)
+        }
 
         // 2. Saturation: clamp to valid physical range
         int sat = clamp(raw, PWM_MIN, PWM_MAX);
@@ -94,6 +115,14 @@ void app_lab_5_2_task2(void *pvParameters) {
 
         // 8. Publish snapshot
         if (xSemaphoreTake(g_snap52_mutex, portMAX_DELAY) == pdTRUE) {
+            // Binary actuator state
+            g_snap52.bin_requested = bin_requested;
+            g_snap52.bin_pending   = bin_pending;
+            g_snap52.bin_state     = bin_state;
+            
+            // Analog motor state
+            g_snap52.analog_mode   = cmd.analog_mode;
+            g_snap52.potentiometer_raw = pot_raw;
             g_snap52.raw       = raw;
             g_snap52.saturated = sat;
             g_snap52.median    = med;
@@ -105,17 +134,24 @@ void app_lab_5_2_task2(void *pvParameters) {
         }
 
         // 9. Update LEDs
-        if (alert) {
-            dd_led_turn_on();    // red ON  - overload alert
-            dd_led_1_turn_off(); // green OFF
-            dd_led_2_turn_on();  // yellow ON - limit / alert
-        } else if (at_limit) {
-            dd_led_turn_off();   // red OFF
-            dd_led_1_turn_off(); // green OFF
-            dd_led_2_turn_on();  // yellow ON - at limit
+        // Red LED: ON if binary actuator is ON, or if analog alert
+        if (bin_state || alert) {
+            dd_led_turn_on();    // red ON - binary ON or overload alert
         } else {
             dd_led_turn_off();   // red OFF
-            dd_led_1_turn_on();  // green ON - OK
+        }
+        
+        // Green LED: indicator of system state
+        if (!bin_state && !alert && !at_limit) {
+            dd_led_1_turn_on();  // green ON - all systems normal
+        } else {
+            dd_led_1_turn_off(); // green OFF
+        }
+        
+        // Yellow LED: ON if motor at limit or analog alert
+        if (at_limit || alert) {
+            dd_led_2_turn_on();  // yellow ON - limit / alert
+        } else {
             dd_led_2_turn_off(); // yellow OFF
         }
         dd_led_apply();
