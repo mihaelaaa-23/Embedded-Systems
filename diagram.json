@@ -1,281 +1,108 @@
 {
   "version": 1,
-  "author": "Lab 5.1",
+  "author": "Lab 6.1 - ON-OFF Hysteresis Control",
   "editor": "wokwi",
   "parts": [
     {
       "type": "wokwi-arduino-mega",
       "id": "mega",
-      "top": -16,
-      "left": 78,
+      "top": 0,
+      "left": 0,
       "attrs": {}
     },
     {
-      "type": "wokwi-breadboard",
-      "id": "bb",
-      "top": 360,
-      "left": -8,
-      "attrs": {}
-    },
-    {
-      "type": "wokwi-potentiometer",
-      "id": "pot_angle",
-      "top": 114,
-      "left": 520,
-      "attrs": {}
+      "type": "wokwi-dht22",
+      "id": "dht1",
+      "top": -80,
+      "left": 560,
+      "attrs": { "temperature": "22", "humidity": "55" }
     },
     {
       "type": "wokwi-lcd1602",
       "id": "lcd1",
-      "top": 250,
-      "left": 504,
+      "top": 140,
+      "left": 490,
       "attrs": {
         "pins": "i2c",
-        "i2cAddress": "0x3F"
+        "i2cAddress": "0x27"
       }
     },
     {
       "type": "wokwi-relay-module",
       "id": "relay1",
-      "top": 392,
-      "left": 440,
+      "top": 340,
+      "left": 530,
       "attrs": {}
     },
     {
-      "type": "wokwi-text",
-      "id": "motor_note",
-      "top": 380,
-      "left": 620,
-      "attrs": {
-        "text": "External L298N + DC Motor\\nENA -> D10 (PWM)\\nIN1 -> D8\\nIN2 -> D7\\n5V + GND common"
-      }
-    },
-    {
       "type": "wokwi-resistor",
-      "id": "r_ok",
-      "top": 200,
-      "left": -150,
-      "attrs": {
-        "value": "220"
-      }
+      "id": "r1",
+      "top": 320,
+      "left": -200,
+      "attrs": { "value": "220" }
     },
     {
       "type": "wokwi-led",
-      "id": "led_ok",
-      "top": 200,
-      "left": -80,
-      "attrs": {
-        "color": "green"
-      }
+      "id": "led_red",
+      "top": 310,
+      "left": -130,
+      "attrs": { "color": "red" }
     },
     {
       "type": "wokwi-resistor",
-      "id": "r_alert",
-      "top": 240,
-      "left": -150,
-      "attrs": {
-        "value": "220"
-      }
+      "id": "r2",
+      "top": 370,
+      "left": -200,
+      "attrs": { "value": "220" }
     },
     {
       "type": "wokwi-led",
-      "id": "led_alert",
-      "top": 240,
-      "left": -80,
-      "attrs": {
-        "color": "yellow"
-      }
+      "id": "led_green",
+      "top": 360,
+      "left": -130,
+      "attrs": { "color": "green" }
     },
     {
       "type": "wokwi-resistor",
-      "id": "r_bin_state",
-      "top": 280,
-      "left": -150,
-      "attrs": {
-        "value": "220"
-      }
+      "id": "r3",
+      "top": 420,
+      "left": -200,
+      "attrs": { "value": "220" }
     },
     {
       "type": "wokwi-led",
-      "id": "led_bin_state",
-      "top": 280,
-      "left": -80,
-      "attrs": {
-        "color": "red"
-      }
+      "id": "led_yellow",
+      "top": 410,
+      "left": -130,
+      "attrs": { "color": "yellow" }
     }
   ],
   "connections": [
-    [
-      "mega:5V",
-      "bb:bp.1",
-      "red",
-      [
-        "v248",
-        "h-88"
-      ]
-    ],
-    [
-      "mega:A0",
-      "pot_angle:SIG",
-      "green",
-      [
-        "v20",
-        "h278"
-      ]
-    ],
-    [
-      "bb:bp.24",
-      "pot_angle:VCC",
-      "red",
-      [
-        "h252",
-        "v-280"
-      ]
-    ],
-    [
-      "bb:bn.24",
-      "pot_angle:GND",
-      "black",
-      [
-        "h252",
-        "v-268"
-      ]
-    ],
-    [
-      "mega:20",
-      "lcd1:SDA",
-      "blue",
-      [
-        "v72",
-        "h352"
-      ]
-    ],
-    [
-      "mega:21",
-      "lcd1:SCL",
-      "white",
-      [
-        "v78",
-        "h340"
-      ]
-    ],
-    [
-      "bb:bp.30",
-      "lcd1:VCC",
-      "red",
-      [
-        "h310",
-        "v-172"
-      ]
-    ],
-    [
-      "bb:bn.30",
-      "lcd1:GND",
-      "black",
-      [
-        "h310",
-        "v-156"
-      ]
-    ],
-    [
-      "mega:13",
-      "relay1:IN",
-      "red",
-      [
-        "v184",
-        "h454"
-      ]
-    ],
-    [
-      "bb:bp.26",
-      "relay1:VCC",
-      "red",
-      [
-        "h355",
-        "v-36"
-      ]
-    ],
-    [
-      "bb:bn.26",
-      "relay1:GND",
-      "black",
-      [
-        "h355",
-        "v-20"
-      ]
-    ],
-    [
-      "mega:12",
-      "r_ok:1",
-      "green",
-      [
-        "h0"
-      ]
-    ],
-    [
-      "r_ok:2",
-      "led_ok:A",
-      "green",
-      [
-        "h0"
-      ]
-    ],
-    [
-      "led_ok:C",
-      "mega:GND.1",
-      "black",
-      [
-        "h0"
-      ]
-    ],
-    [
-      "mega:11",
-      "r_alert:1",
-      "yellow",
-      [
-        "h0"
-      ]
-    ],
-    [
-      "r_alert:2",
-      "led_alert:A",
-      "yellow",
-      [
-        "h0"
-      ]
-    ],
-    [
-      "led_alert:C",
-      "mega:GND.1",
-      "black",
-      [
-        "h0"
-      ]
-    ],
-    [
-      "mega:9",
-      "r_bin_state:1",
-      "red",
-      [
-        "h0"
-      ]
-    ],
-    [
-      "r_bin_state:2",
-      "led_bin_state:A",
-      "red",
-      [
-        "h0"
-      ]
-    ],
-    [
-      "led_bin_state:C",
-      "mega:GND.1",
-      "black",
-      [
-        "h0"
-      ]
-    ]
+    ["mega:GND.1", "mega:GND.1", "black", []],
+
+    ["mega:2",    "dht1:SDA",   "green",  ["v-10", "h476"]],
+    ["mega:5V",   "dht1:VCC",   "red",    ["v-36", "h560", "v-80"]],
+    ["mega:GND.1","dht1:GND",   "black",  ["v-50", "h480", "v-120"]],
+
+    ["mega:20",   "lcd1:SDA",   "blue",   ["v100", "h330"]],
+    ["mega:21",   "lcd1:SCL",   "white",  ["v90",  "h310"]],
+    ["mega:5V",   "lcd1:VCC",   "red",    ["v-36", "h490", "v175"]],
+    ["mega:GND.1","lcd1:GND",   "black",  ["v-50", "h390", "v260"]],
+
+    ["mega:6",    "relay1:IN",  "orange", ["v240", "h410"]],
+    ["mega:5V",   "relay1:VCC", "red",    ["v-36", "h530", "v375"]],
+    ["mega:GND.1","relay1:GND", "black",  ["v-50", "h400", "v420"]],
+
+    ["mega:9",    "r1:1",         "red",    ["h-150", "v316"]],
+    ["r1:2",      "led_red:A",    "red",    ["h10"]],
+    ["led_red:C", "mega:GND.2",   "black",  ["h0"]],
+
+    ["mega:12",   "r2:1",         "green",  ["h-180", "v366"]],
+    ["r2:2",      "led_green:A",  "green",  ["h10"]],
+    ["led_green:C","mega:GND.2",  "black",  ["h0"]],
+
+    ["mega:11",   "r3:1",         "yellow", ["h-180", "v416"]],
+    ["r3:2",      "led_yellow:A", "yellow", ["h10"]],
+    ["led_yellow:C","mega:GND.2", "black",  ["h0"]]
   ]
 }
