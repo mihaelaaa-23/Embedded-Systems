@@ -5,72 +5,76 @@
 #include <semphr.h>
 
 // ── Task timing ───────────────────────────────────────────────────────────────
-#define ACQ_PERIOD_MS            20     // T1: input sampling period
-#define FSM_PERIOD_MS            50     // T2: FSM evaluation period
-#define DISPLAY_PERIOD_MS       500     // T3: semaphore timeout / LCD refresh
+#define ACQ_PERIOD_MS            20     // T1: input sampling
+#define FSM_PERIOD_MS            50     // T2: FSM evaluation
+#define DISPLAY_PERIOD_MS      1000     // T3: semaphore timeout (1s countdown)
 #define SERIAL_HEARTBEAT_MS   10000     // T3: unconditional serial reprint
 
 // ── Traffic light phase durations ────────────────────────────────────────────
-#define EW_YELLOW_MS           3000     // EW yellow hold before NS green
-#define NS_GREEN_MS            5000     // NS green hold duration
-#define NS_YELLOW_MS           3000     // NS yellow hold before return to EW
-#define EMERGENCY_MS          10000     // both-red emergency hold duration
+#define EW_YELLOW_MS           3000
+#define EW_RED_CLEAR_MS        1500     // all-red clearance EW->NS
+#define NS_GREEN_MS            5000
+#define NS_YELLOW_MS           3000
+#define NS_RED_CLEAR_MS        1500     // all-red clearance NS->EW
+#define EMERGENCY_MS          10000
 
-// Steps = duration / FSM_PERIOD_MS
-#define EW_YELLOW_TICKS   (EW_YELLOW_MS  / FSM_PERIOD_MS)   // 60
-#define NS_GREEN_TICKS    (NS_GREEN_MS   / FSM_PERIOD_MS)   // 100
-#define NS_YELLOW_TICKS   (NS_YELLOW_MS  / FSM_PERIOD_MS)   // 60
-#define EMERGENCY_TICKS   (EMERGENCY_MS  / FSM_PERIOD_MS)   // 200
+#define EW_YELLOW_TICKS    (EW_YELLOW_MS    / FSM_PERIOD_MS)   //  60
+#define EW_RED_CLEAR_TICKS (EW_RED_CLEAR_MS / FSM_PERIOD_MS)   //  30
+#define NS_GREEN_TICKS     (NS_GREEN_MS     / FSM_PERIOD_MS)   // 100
+#define NS_YELLOW_TICKS    (NS_YELLOW_MS    / FSM_PERIOD_MS)   //  60
+#define NS_RED_CLEAR_TICKS (NS_RED_CLEAR_MS / FSM_PERIOD_MS)   //  30
+#define EMERGENCY_TICKS    (EMERGENCY_MS    / FSM_PERIOD_MS)   // 200
+
+// ── Emergency long-press threshold ───────────────────────────────────────────
+// D3 must be held for EMRG_HOLD_MS continuously to activate emergency.
+#define EMRG_HOLD_MS           3000
+#define EMRG_HOLD_TICKS        (EMRG_HOLD_MS / FSM_PERIOD_MS)   // 60
 
 // ── Debounce ──────────────────────────────────────────────────────────────────
-#define BTN_PERSISTENCE_SAMPLES  3      // consecutive samples to confirm press
+#define BTN_PERSISTENCE_SAMPLES   3
 
-// ── Hardware pins — EW direction (reusing dd_led pins) ───────────────────────
-#define PIN_EW_RED       9              // dd_led  LED_PIN
-#define PIN_EW_YELLOW   11              // dd_led  LED_2_PIN
-#define PIN_EW_GREEN    12              // dd_led  LED_1_PIN
-
-// ── Hardware pins — NS direction (new LEDs) ───────────────────────────────────
+// ── Hardware pins ─────────────────────────────────────────────────────────────
+#define PIN_EW_RED       9
+#define PIN_EW_YELLOW   11
+#define PIN_EW_GREEN    12
 #define PIN_NS_RED       6
 #define PIN_NS_YELLOW    7
 #define PIN_NS_GREEN     8
+#define PIN_BTN_NS        2
+#define PIN_BTN_EMERGENCY 3
 
-// ── Hardware pins — inputs ────────────────────────────────────────────────────
-#define PIN_BTN_NS        2             // dd_button BUTTON_PIN   - NS request
-#define PIN_BTN_EMERGENCY 3             // dd_button BUTTON_1_PIN - emergency
-
-// ── Global FSM phases ─────────────────────────────────────────────────────────
-// Single shared FSM for the intersection — directions are interlocked.
-//
-//  Phase          EW light    NS light    Trigger / Duration
-//  -------------- ----------- ----------- -------------------------
-//  EW_GREEN       GREEN       RED         default; waits for NS request
-//  EW_YELLOW      YELLOW      RED         timed: EW_YELLOW_TICKS steps
-//  NS_GREEN       RED         GREEN       timed: NS_GREEN_TICKS steps
-//  NS_YELLOW      RED         YELLOW      timed: NS_YELLOW_TICKS steps
-//  EMERGENCY      RED         RED         timed: EMERGENCY_TICKS steps
-//                                         from any phase via pin 3
+// ── EW FSM states ─────────────────────────────────────────────────────────────
 typedef enum {
-    PHASE_EW_GREEN   = 0,
-    PHASE_EW_YELLOW  = 1,
-    PHASE_NS_GREEN   = 2,
-    PHASE_NS_YELLOW  = 3,
-    PHASE_EMERGENCY  = 4
-} TrafficPhase_t;
+    EW_GREEN         = 0,   // default: EW green, waits for NS request
+    EW_YELLOW        = 1,   // transitioning out: 3s
+    EW_RED_CLEAR     = 2,   // all-red buffer before NS green: 1.5s
+    EW_RED           = 3,   // NS is active: EW holds red
+    EW_YELLOW_RETURN = 4,   // returning: 3s yellow before EW green
+} EwState_t;
+
+// ── NS FSM states ─────────────────────────────────────────────────────────────
+typedef enum {
+    NS_RED           = 0,   // default: NS red, waiting for EW to yield
+    NS_GREEN         = 1,   // NS crossing active: 5s
+    NS_YELLOW        = 2,   // NS transitioning out: 3s
+    NS_RED_CLEAR     = 3,   // all-red buffer before EW returns: 1.5s
+} NsState_t;
 
 // ── Shared snapshot (T2 -> T3) ────────────────────────────────────────────────
 typedef struct {
-    TrafficPhase_t phase;           // current intersection phase
-    TrafficPhase_t pre_emergency;   // phase to resume after emergency
-    int            timer_ticks;     // ticks remaining in current timed phase
-    bool           ns_request;      // pending NS crossing request
-    bool           emergency;       // emergency currently active
-    uint16_t       cycle_count;     // completed EW_GREEN->...->EW_GREEN cycles
-    uint32_t       uptime_ms;       // ms since scheduler start
+    EwState_t  ew_state;        // current EW FSM state
+    NsState_t  ns_state;        // current NS FSM state
+    int        ew_timer;        // ticks remaining in current EW timed phase
+    int        ns_timer;        // ticks remaining in current NS timed phase
+    bool       ns_request;      // pending NS crossing request
+    bool       emergency;       // emergency currently active
+    int        emrg_hold;       // ticks D3 has been held (0..EMRG_HOLD_TICKS)
+    uint16_t   cycle_count;     // completed full cycles
+    uint32_t   uptime_ms;
 } App72Snapshot_t;
 
 extern App72Snapshot_t   g_snap72;
 extern SemaphoreHandle_t g_snap72_mutex;
-extern SemaphoreHandle_t g_fsm_event_72;   // T2 signals T3 on phase change
+extern SemaphoreHandle_t g_fsm_event_72;
 
 #endif // APP_LAB_7_2_TASK_CONFIG_H

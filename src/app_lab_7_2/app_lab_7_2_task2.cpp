@@ -6,16 +6,12 @@
 #include <Arduino_FreeRTOS.h>
 #include <semphr.h>
 
-// ── Shared globals ────────────────────────────────────────────────────────────
+// ── Shared globals ─────────────────────────────────────────────────────────────
 App72Snapshot_t   g_snap72       = {};
 SemaphoreHandle_t g_snap72_mutex = NULL;
-SemaphoreHandle_t g_fsm_event_72    = NULL;
+SemaphoreHandle_t g_fsm_event_72 = NULL;
 
-// ── LED output helpers ────────────────────────────────────────────────────────
-// EW LEDs use dd_led (pins 9, 11, 12).
-// NS LEDs use direct digitalWrite (pins 6, 7, 8).
-// All six are applied together at the end of each FSM step.
-
+// ── LED output helpers ─────────────────────────────────────────────────────────
 static void set_ew(bool red, bool yellow, bool green) {
     red    ? dd_led_turn_on()   : dd_led_turn_off();    // pin 9
     yellow ? dd_led_2_turn_on() : dd_led_2_turn_off();  // pin 11
@@ -28,79 +24,37 @@ static void set_ns(bool red, bool yellow, bool green) {
     digitalWrite(PIN_NS_GREEN,  green  ? HIGH : LOW);
 }
 
-static void apply_phase(TrafficPhase_t phase) {
-    switch (phase) {
-        case PHASE_EW_GREEN:
-            set_ew(false, false, true);
-            set_ns(true,  false, false);
-            break;
-        case PHASE_EW_YELLOW:
-            set_ew(false, true,  false);
-            set_ns(true,  false, false);
-            break;
-        case PHASE_NS_GREEN:
-            set_ew(true,  false, false);
-            set_ns(false, false, true);
-            break;
-        case PHASE_NS_YELLOW:
-            set_ew(true,  false, false);
-            set_ns(false, true,  false);
-            break;
-        case PHASE_EMERGENCY:
-            set_ew(true,  false, false);
-            set_ns(true,  false, false);
-            break;
+// Moore output functions — output = f(state) for each FSM
+static void apply_ew(EwState_t s) {
+    switch (s) {
+        case EW_GREEN:         set_ew(false, false, true);  break;
+        case EW_YELLOW:        set_ew(false, true,  false); break;
+        case EW_RED_CLEAR:     set_ew(true,  false, false); break;
+        case EW_RED:           set_ew(true,  false, false); break;
+        case EW_YELLOW_RETURN: set_ew(false, true,  false); break;
     }
-    dd_led_apply();  // commit EW targets; NS already written via digitalWrite
 }
 
-// ── FSM table ─────────────────────────────────────────────────────────────────
-// Moore model: output = f(phase), encoded in apply_phase() above.
-// Next phase = f(phase, input), encoded in the table below.
-//
-// Timed transitions use a step counter; input-driven transitions are immediate.
-// Emergency bypasses the table from any phase.
-//
-//  Phase         Trigger            Next phase       Timer (ticks)
-//  ------------- ------------------ ---------------- -------------
-//  EW_GREEN      NS request latched EW_YELLOW        --
-//  EW_GREEN      no request         EW_GREEN         (stays)
-//  EW_YELLOW     timer expires      NS_GREEN         EW_YELLOW_TICKS
-//  NS_GREEN      timer expires      NS_YELLOW        NS_GREEN_TICKS
-//  NS_YELLOW     timer expires      EW_GREEN         NS_YELLOW_TICKS
-//  EMERGENCY     timer expires      pre_emergency    EMERGENCY_TICKS
-//  any           emergency btn      EMERGENCY        --
+static void apply_ns(NsState_t s) {
+    switch (s) {
+        case NS_RED:       set_ns(true,  false, false); break;
+        case NS_GREEN:     set_ns(false, false, true);  break;
+        case NS_YELLOW:    set_ns(false, true,  false); break;
+        case NS_RED_CLEAR: set_ns(true,  false, false); break;
+    }
+}
 
+// ── 3-sample debounce ─────────────────────────────────────────────────────────
 typedef struct {
-    int            duration_ticks;  // 0 = input-driven (no timer)
-    TrafficPhase_t next_timed;      // phase after timer expires
-} PhaseConfig_t;
-
-static const PhaseConfig_t PHASE_CFG[5] = {
-    /* EW_GREEN  */ {  0,               PHASE_EW_GREEN  },  // input-driven
-    /* EW_YELLOW */ {  EW_YELLOW_TICKS, PHASE_NS_GREEN  },
-    /* NS_GREEN  */ {  NS_GREEN_TICKS,  PHASE_NS_YELLOW },
-    /* NS_YELLOW */ {  NS_YELLOW_TICKS, PHASE_EW_GREEN  },
-    /* EMERGENCY */ {  EMERGENCY_TICKS, PHASE_EW_GREEN  },  // next set at entry
-};
-
-// ── 3-sample debounce (one instance per button) ───────────────────────────────
-typedef struct {
-    bool raw;
-    bool stable;
-    bool candidate;
+    bool raw, stable, candidate, was_stable;
     int  count;
-    bool was_stable;
 } Debounce_t;
 
 static void debounce_step(Debounce_t *d, bool raw) {
     d->raw = raw;
     if (raw == d->candidate) {
         if (d->count < BTN_PERSISTENCE_SAMPLES) d->count++;
-    } else {
-        d->candidate = raw;
-        d->count     = 1;
-    }
+    } else { d->candidate = raw; d->count = 1; }
     if (d->count >= BTN_PERSISTENCE_SAMPLES) d->stable = d->candidate;
 }
 
@@ -113,18 +67,22 @@ static bool rising_edge(Debounce_t *d) {
 // ── Task init ─────────────────────────────────────────────────────────────────
 void app_lab_7_2_task2_init() {
     g_snap72_mutex = xSemaphoreCreateMutex();
-    g_fsm_event_72    = xSemaphoreCreateBinary();
+    g_fsm_event_72 = xSemaphoreCreateBinary();
 }
 
 // ── Task body ─────────────────────────────────────────────────────────────────
 void app_lab_7_2_task2(void *pvParameters) {
     (void)pvParameters;
 
-    TrafficPhase_t phase         = PHASE_EW_GREEN;
-    TrafficPhase_t pre_emergency = PHASE_EW_GREEN;
-    int            timer         = 0;
-    bool           ns_request    = false;
-    uint16_t       cycle_count   = 0;
+    // Two independent Moore FSMs — one per direction
+    EwState_t  ew_state    = EW_GREEN;
+    NsState_t  ns_state    = NS_RED;
+    int        ew_timer    = 0;
+    int        ns_timer    = 0;
+    bool       ns_request  = false;
+    bool       emergency   = false;
+    int        emrg_hold   = 0;   // consecutive ticks D3 held pressed
+    uint16_t   cycle_count = 0;
 
     Debounce_t deb_ns   = {};
     Debounce_t deb_emrg = {};
@@ -132,83 +90,169 @@ void app_lab_7_2_task2(void *pvParameters) {
     TickType_t last_wake = xTaskGetTickCount();
 
     for (;;) {
-        TrafficPhase_t prev_phase = phase;
+        EwState_t prev_ew = ew_state;
+        NsState_t prev_ns = ns_state;
 
-        // ── Step 1: Apply output for current phase (Moore: out = f(phase))
-        apply_phase(phase);
+        // ── Step 1: Apply outputs (Moore: out = f(state)) ────────────────────
+        if (emergency) {
+            set_ew(true, false, false);
+            set_ns(true, false, false);
+        } else {
+            apply_ew(ew_state);
+            apply_ns(ns_state);
+        }
+        dd_led_apply();   // commit EW dd_led targets
 
-        // ── Step 3: Read inputs
+        // ── Step 3: Read inputs ───────────────────────────────────────────────
         debounce_step(&deb_ns,   app_lab_7_2_task1_get_ns_raw());
         debounce_step(&deb_emrg, app_lab_7_2_task1_get_emrg_raw());
 
-        bool ns_press   = rising_edge(&deb_ns);
-        bool emrg_press = rising_edge(&deb_emrg);
-
-        // Latch NS request — cleared when NS_GREEN is entered
+        bool ns_press = rising_edge(&deb_ns);
         if (ns_press) ns_request = true;
 
-        // ── Step 4: Compute next phase ────────────────────────────────────────
-
-        // Emergency preempts any phase immediately
-        if (emrg_press && phase != PHASE_EMERGENCY) {
-            pre_emergency = phase;
-            phase         = PHASE_EMERGENCY;
-            timer         = EMERGENCY_TICKS;
-            printf("[EMERGENCY] Both directions RED for %ds\n",
-                   EMERGENCY_MS / 1000);
-        }
-        else if (PHASE_CFG[phase].duration_ticks == 0) {
-            // Input-driven phase (EW_GREEN): transition on NS request
-            if (ns_request) {
-                phase     = PHASE_EW_YELLOW;
-                timer     = EW_YELLOW_TICKS;
-                ns_request = false;
+        // Emergency long-press detection:
+        // D3 must be held for EMRG_HOLD_TICKS consecutive FSM steps.
+        // Counter increments while held, resets immediately on release.
+        bool emrg_fired = false;
+        if (deb_emrg.stable) {
+            if (emrg_hold < EMRG_HOLD_TICKS) emrg_hold++;
+            if (emrg_hold == EMRG_HOLD_TICKS && !emergency) {
+                emergency  = true;
+                emrg_fired = true;
+                ew_timer   = EMERGENCY_TICKS;
+                printf("[EMERGENCY] Activated — both RED for %ds\n",
+                       EMERGENCY_MS / 1000);
             }
-            // else: stay in EW_GREEN
-        }
-        else {
-            // Timed phase: count down, transition when timer expires
-            if (timer > 0) {
-                timer--;
-            }
-            if (timer == 0) {
-                if (phase == PHASE_EMERGENCY) {
-                    // Resume the phase that was interrupted
-                    phase = pre_emergency;
-                    timer = PHASE_CFG[phase].duration_ticks;
-                    // If resuming EW_GREEN (input-driven), timer stays 0
-                } else {
-                    phase = PHASE_CFG[phase].next_timed;
-                    timer = PHASE_CFG[phase].duration_ticks;
-                }
-
-                // Count completed full cycles
-                if (phase == PHASE_EW_GREEN) cycle_count++;
-
-                // Clear NS request when NS_GREEN is entered
-                if (phase == PHASE_NS_GREEN) ns_request = false;
-            }
+        } else {
+            emrg_hold = 0;
+            // Emergency clears only via timer, not on button release
         }
 
-        // ── Signal T3 on phase change
-        if (phase != prev_phase) xSemaphoreGive(g_fsm_event_72);
+        // ── Step 4: Compute next states ───────────────────────────────────────
 
-        // ── Publish snapshot
+        if (emergency) {
+            // ── Emergency mode: both FSMs frozen, single shared timer
+            if (!emrg_fired) {   // don't decrement on the cycle it just fired
+                if (ew_timer > 0) ew_timer--;
+            }
+            if (ew_timer == 0) {
+                emergency = false;
+                emrg_hold = 0;
+                // Return both FSMs to default safe state
+                ew_state  = EW_GREEN;
+                ns_state  = NS_RED;
+                ns_timer  = 0;
+                ew_timer  = 0;
+                cycle_count++;
+                printf("[EMERGENCY] Cleared — resuming EW GREEN\n");
+            }
+        } else {
+            // ── EW FSM step ──────────────────────────────────────────────────
+            switch (ew_state) {
+
+                case EW_GREEN:
+                    // Input-driven: yield to NS request
+                    if (ns_request) {
+                        ew_state   = EW_YELLOW;
+                        ew_timer   = EW_YELLOW_TICKS;
+                        ns_request = false;
+                    }
+                    break;
+
+                case EW_YELLOW:
+                    if (ew_timer > 0) ew_timer--;
+                    if (ew_timer == 0) {
+                        ew_state = EW_RED_CLEAR;
+                        ew_timer = EW_RED_CLEAR_TICKS;
+                    }
+                    break;
+
+                case EW_RED_CLEAR:
+                    // All-red buffer: EW red, NS still red
+                    // When this expires, signal NS FSM to go green
+                    if (ew_timer > 0) ew_timer--;
+                    if (ew_timer == 0) {
+                        ew_state = EW_RED;
+                        // Kick NS FSM
+                        ns_state = NS_GREEN;
+                        ns_timer = NS_GREEN_TICKS;
+                    }
+                    break;
+
+                case EW_RED:
+                    // Wait for NS FSM to finish (NS_RED_CLEAR expires)
+                    // NS FSM will set ew_state = EW_YELLOW_RETURN when ready
+                    break;
+
+                case EW_YELLOW_RETURN:
+                    if (ew_timer > 0) ew_timer--;
+                    if (ew_timer == 0) {
+                        ew_state = EW_GREEN;
+                        cycle_count++;
+                    }
+                    break;
+            }
+
+            // ── NS FSM step ──────────────────────────────────────────────────
+            switch (ns_state) {
+
+                case NS_RED:
+                    // Waiting — EW_RED_CLEAR will kick us to NS_GREEN
+                    break;
+
+                case NS_GREEN:
+                    if (ns_timer > 0) ns_timer--;
+                    if (ns_timer == 0) {
+                        ns_state = NS_YELLOW;
+                        ns_timer = NS_YELLOW_TICKS;
+                    }
+                    break;
+
+                case NS_YELLOW:
+                    if (ns_timer > 0) ns_timer--;
+                    if (ns_timer == 0) {
+                        ns_state = NS_RED_CLEAR;
+                        ns_timer = NS_RED_CLEAR_TICKS;
+                    }
+                    break;
+
+                case NS_RED_CLEAR:
+                    // All-red buffer: NS red, EW still red
+                    // When this expires, kick EW FSM to return
+                    if (ns_timer > 0) ns_timer--;
+                    if (ns_timer == 0) {
+                        ns_state = NS_RED;
+                        // Kick EW FSM back to yellow return
+                        ew_state = EW_YELLOW_RETURN;
+                        ew_timer = EW_YELLOW_TICKS;
+                    }
+                    break;
+            }
+        }
+
+        // ── Signal T3 on any state change ────────────────────────────────────
+        if (ew_state != prev_ew || ns_state != prev_ns) {
+            xSemaphoreGive(g_fsm_event_72);
+        }
+
+        // ── Publish snapshot ──────────────────────────────────────────────────
         if (xSemaphoreTake(g_snap72_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-            g_snap72.phase         = phase;
-            g_snap72.pre_emergency = pre_emergency;
-            g_snap72.timer_ticks   = timer;
-            g_snap72.ns_request    = ns_request;
-            g_snap72.emergency     = (phase == PHASE_EMERGENCY);
-            g_snap72.cycle_count   = cycle_count;
-            g_snap72.uptime_ms     = (uint32_t)(xTaskGetTickCount()
-                                      * portTICK_PERIOD_MS);
+            g_snap72.ew_state    = ew_state;
+            g_snap72.ns_state    = ns_state;
+            g_snap72.ew_timer    = ew_timer;
+            g_snap72.ns_timer    = ns_timer;
+            g_snap72.ns_request  = ns_request;
+            g_snap72.emergency   = emergency;
+            g_snap72.emrg_hold   = emrg_hold;
+            g_snap72.cycle_count = cycle_count;
+            g_snap72.uptime_ms   = (uint32_t)(xTaskGetTickCount()
+                                    * portTICK_PERIOD_MS);
             xSemaphoreGive(g_snap72_mutex);
         } else {
             printf("[T2] WARN: snapshot mutex timeout\n");
         }
 
-        // ── Step 2: fixed-period wait
+        // ── Step 2: fixed-period wait ─────────────────────────────────────────
         vTaskDelayUntil(&last_wake, pdMS_TO_TICKS(FSM_PERIOD_MS));
     }
 }
